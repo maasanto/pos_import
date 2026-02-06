@@ -10,7 +10,19 @@ from pos_import.pos_import.parsers.base import POSReport
 
 
 class POSImport(Document):
+	def get_indicator(self):
+		"""Return status indicator for list view."""
+		status_map = {
+			"Success": ("green", "Success"),
+			"Partial Success": ("orange", "Partial Success"),
+			"Error": ("red", "Error"),
+			"Pending": ("gray", "Pending"),
+		}
+		return status_map.get(self.import_status, ("gray", "Unknown"))
+
 	def validate(self):
+		if not self.import_status:
+			self.import_status = "Pending"
 		if self.import_file and not self.get("preview_html"):
 			self.parse_and_preview()
 
@@ -20,6 +32,9 @@ class POSImport(Document):
 		reports = self._parse_file()
 
 		log_messages = []
+		success_count = 0
+		error_count = 0
+
 		for report in reports:
 			row = self._find_or_create_report_row(report)
 
@@ -31,12 +46,14 @@ class POSImport(Document):
 				row.status = "Created"
 				row.db_update()
 				log_messages.append(f"Z-{report.report_number}: Facture {sales_invoice.name} créée")
+				success_count += 1
 
 			except Exception as e:
 				row.status = "Error"
 				row.error_message = str(e)
 				row.db_update()
 				log_messages.append(f"Z-{report.report_number}: Erreur - {e}")
+				error_count += 1
 				frappe.log_error(
 					title=f"POS Import Error: {self.name} - Z-{report.report_number}",
 					message=frappe.get_traceback(),
@@ -44,6 +61,19 @@ class POSImport(Document):
 
 		self.import_log = "\n".join(log_messages)
 		self.db_set("import_log", self.import_log)
+
+		# Set import status based on results
+		total = success_count + error_count
+		if total == 0:
+			import_status = "Error"
+		elif error_count == 0:
+			import_status = "Success"
+		elif success_count == 0:
+			import_status = "Error"
+		else:
+			import_status = "Partial Success"
+
+		self.db_set("import_status", import_status)
 
 	def on_cancel(self):
 		"""Cancel all linked Sales Invoices."""
@@ -59,6 +89,66 @@ class POSImport(Document):
 		self.parse_and_preview()
 		self.save()
 		return self.get("preview_html")
+
+	@frappe.whitelist()
+	def reprocess_failed(self):
+		"""Reprocess failed or pending invoices."""
+		if self.docstatus != 1:
+			frappe.throw(_("Document must be submitted to reprocess"))
+
+		connector = frappe.get_doc("POS Connector", self.connector)
+		reports = self._parse_file()
+		log_messages = []
+
+		for row in self.imported_reports:
+			if row.status in ("Error", "Pending"):
+				report = next((r for r in reports if r.report_number == row.report_number), None)
+				if not report:
+					continue
+
+				try:
+					self._validate_tax_amounts(report)
+					sales_invoice = self._create_sales_invoice(report, connector)
+
+					row.sales_invoice = sales_invoice.name
+					row.status = "Created"
+					row.error_message = None
+					row.db_update()
+					log_messages.append(f"Z-{report.report_number}: Facture {sales_invoice.name} créée")
+
+				except Exception as e:
+					row.status = "Error"
+					row.error_message = str(e)
+					row.db_update()
+					log_messages.append(f"Z-{report.report_number}: Erreur - {e}")
+					frappe.log_error(
+						title=f"POS Import Reprocess Error: {self.name} - Z-{report.report_number}",
+						message=frappe.get_traceback(),
+					)
+
+		if log_messages:
+			self.import_log = (self.import_log or "") + "\n\n" + "\n".join(log_messages)
+			self.db_set("import_log", self.import_log)
+
+		# Recalculate overall status based on all reports
+		self.reload()
+		success_count = sum(1 for row in self.imported_reports if row.status == "Created")
+		error_count = sum(1 for row in self.imported_reports if row.status in ("Error", "Pending"))
+		total = len(self.imported_reports)
+
+		if total == 0:
+			import_status = "Error"
+		elif error_count == 0:
+			import_status = "Success"
+		elif success_count == 0:
+			import_status = "Error"
+		else:
+			import_status = "Partial Success"
+
+		self.db_set("import_status", import_status)
+
+		frappe.msgprint(_("Reprocessing complete. Check the import log for details."))
+		return len(log_messages)
 
 	def parse_and_preview(self):
 		"""Parse the file and generate preview data."""
@@ -292,9 +382,6 @@ class POSImport(Document):
 		si.update_stock = 0
 		if cash_account:
 			si.account_for_change_amount = cash_account
-
-		if connector.naming_series:
-			si.naming_series = connector.naming_series
 
 		# Reference to POS report
 		si.po_no = f"Z-{report.report_number}"

@@ -9,6 +9,7 @@
 		"connector_code",
 		"company",
 		"column_break_1",
+		"import_status",
 		"import_file",
 		"section_preview",
 		"preview_html",
@@ -45,6 +46,14 @@
 		{
 			"fieldname": "column_break_1",
 			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "import_status",
+			"fieldtype": "Select",
+			"in_list_view": 1,
+			"label": "Import Status",
+			"options": "Pending\nSuccess\nPartial Success\nError",
+			"read_only": 1
 		},
 		{
 			"fieldname": "import_file",
