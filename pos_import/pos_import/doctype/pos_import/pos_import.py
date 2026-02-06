@@ -437,24 +437,6 @@ class POSImport(Document):
 					},
 				)
 
-		# Add payments
-		for payment in report.payments:
-			mode_of_payment = connector.get_mode_of_payment_for_source_code(payment.source_code)
-			if not mode_of_payment:
-				frappe.throw(
-					_(
-						"No payment mapping found for source code {0}. Please configure the connector."
-					).format(payment.source_code)
-				)
-
-			si.append(
-				"payments",
-				{
-					"mode_of_payment": mode_of_payment,
-					"amount": float(payment.amount),
-				},
-			)
-
 		si.insert(ignore_permissions=True)
 
 		# Validate invoice amounts against Z-ticket before submission
@@ -464,7 +446,72 @@ class POSImport(Document):
 		if not connector.create_draft_invoices:
 			si.submit()
 
+			# Create Payment Entries after submission
+			self._create_payment_entries(si, report, connector)
+
 		return si
+
+	def _create_payment_entries(self, sales_invoice, report, connector):
+		"""Create Payment Entry documents for each payment in the Z-ticket."""
+		for payment in report.payments:
+			mode_of_payment = connector.get_mode_of_payment_for_source_code(payment.source_code)
+			if not mode_of_payment:
+				frappe.throw(
+					_(
+						"No payment mapping found for source code {0}. Please configure the connector."
+					).format(payment.source_code)
+				)
+
+			# Get the default account for this mode of payment
+			mode_of_payment_doc = frappe.get_cached_doc("Mode of Payment", mode_of_payment)
+			if not mode_of_payment_doc.accounts:
+				frappe.throw(
+					_("Mode of Payment {0} has no account configured for company {1}").format(
+						mode_of_payment, sales_invoice.company
+					)
+				)
+
+			# Find account for this company
+			payment_account = None
+			for account_row in mode_of_payment_doc.accounts:
+				if account_row.company == sales_invoice.company:
+					payment_account = account_row.default_account
+					break
+
+			if not payment_account:
+				frappe.throw(
+					_("Mode of Payment {0} has no account configured for company {1}").format(
+						mode_of_payment, sales_invoice.company
+					)
+				)
+
+			# Create Payment Entry
+			pe = frappe.new_doc("Payment Entry")
+			pe.payment_type = "Receive"
+			pe.party_type = "Customer"
+			pe.party = sales_invoice.customer
+			pe.company = sales_invoice.company
+			pe.posting_date = sales_invoice.posting_date
+			pe.mode_of_payment = mode_of_payment
+			pe.paid_from = sales_invoice.debit_to
+			pe.paid_to = payment_account
+			pe.paid_amount = float(payment.amount)
+			pe.received_amount = float(payment.amount)
+			pe.reference_no = f"Z-{report.report_number}"
+			pe.reference_date = sales_invoice.posting_date
+
+			# Link to Sales Invoice
+			pe.append(
+				"references",
+				{
+					"reference_doctype": "Sales Invoice",
+					"reference_name": sales_invoice.name,
+					"allocated_amount": float(payment.amount),
+				},
+			)
+
+			pe.insert(ignore_permissions=True)
+			pe.submit()
 
 	def _render_preview_html(self, preview_data: dict) -> str:
 		"""Render preview data as HTML."""
