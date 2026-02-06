@@ -128,6 +128,70 @@ def get_territory():
 	return frappe.db.get_value("Territory", {}, "name")
 
 
+def get_default_income_account(company):
+	"""Get default income account for a company."""
+	# Try to get from company default
+	income_account = frappe.db.get_value(
+		"Company", company, "default_income_account"
+	)
+	if income_account:
+		return income_account
+
+	# Get any income account for this company
+	income_account = frappe.db.get_value(
+		"Account",
+		{
+			"company": company,
+			"account_type": "Income Account",
+			"is_group": 0,
+		},
+		"name",
+	)
+	if income_account:
+		return income_account
+
+	# Get any revenue account
+	income_account = frappe.db.get_value(
+		"Account",
+		{
+			"company": company,
+			"root_type": "Income",
+			"is_group": 0,
+		},
+		"name",
+	)
+	return income_account
+
+
+def get_default_tax_account(company):
+	"""Get default tax account for a company."""
+	# Look for VAT/Sales Tax account
+	tax_account = frappe.db.get_value(
+		"Account",
+		{
+			"company": company,
+			"account_type": ["in", ["Tax", "Chargeable"]],
+			"is_group": 0,
+		},
+		"name",
+	)
+	if tax_account:
+		return tax_account
+
+	# Look for any liability account that might be tax-related
+	tax_account = frappe.db.get_value(
+		"Account",
+		{
+			"company": company,
+			"root_type": "Liability",
+			"is_group": 0,
+		},
+		"name",
+		order_by="name",
+	)
+	return tax_account
+
+
 def create_default_customer():
 	"""Create default POS customer (requires site setup wizard to have been run)."""
 	customer_name = "Client Comptoir POS"
@@ -184,6 +248,17 @@ def create_restomax_connector():
 		)
 		return
 
+	# Get required accounts
+	income_account = get_default_income_account(company)
+	tax_account = get_default_tax_account(company)
+
+	if not income_account or not tax_account:
+		frappe.log_error(
+			title="POS Import Setup",
+			message=f"Missing required accounts for company {company}. Income: {income_account}, Tax: {tax_account}",
+		)
+		return
+
 	connector = frappe.new_doc("POS Connector")
 	connector.connector_name = connector_name
 	connector.connector_code = "RESTOMAX"
@@ -191,6 +266,8 @@ def create_restomax_connector():
 	connector.file_type = "Excel"
 	connector.company = company
 	connector.default_customer = customer
+	connector.default_income_account = income_account
+	connector.default_tax_account = tax_account
 	connector.enabled = 1
 
 	default_payments = [
@@ -238,6 +315,17 @@ def create_restomax_pdf_connector():
 	if not customer:
 		return
 
+	# Get required accounts
+	income_account = get_default_income_account(company)
+	tax_account = get_default_tax_account(company)
+
+	if not income_account or not tax_account:
+		frappe.log_error(
+			title="POS Import Setup",
+			message=f"Missing required accounts for company {company}. Income: {income_account}, Tax: {tax_account}",
+		)
+		return
+
 	connector = frappe.new_doc("POS Connector")
 	connector.connector_name = connector_name
 	connector.connector_code = "RESTOMAX-PDF"
@@ -245,6 +333,8 @@ def create_restomax_pdf_connector():
 	connector.file_type = "PDF"
 	connector.company = company
 	connector.default_customer = customer
+	connector.default_income_account = income_account
+	connector.default_tax_account = tax_account
 	connector.enabled = 1
 
 	# Item mappings by TVA code (A=21%, B=12%, C=6%, D=0%)
