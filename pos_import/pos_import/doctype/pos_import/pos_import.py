@@ -267,9 +267,11 @@ class POSImport(Document):
 		- Net total (HT)
 		- Tax total (TVA)
 		- Grand total (TTC)
-		- Payment total
 
 		Raises an error if discrepancies exceed tolerance (1 EUR).
+
+		Note: Payment validation is skipped as payments are created separately
+		as Payment Entry documents after invoice submission.
 		"""
 		tolerance = 1.0  # EUR
 
@@ -277,13 +279,11 @@ class POSImport(Document):
 		z_net = float(report.total_net)
 		z_tax = float(report.total_tax)
 		z_gross = float(report.total_gross)
-		z_payments = float(report.total_payments)
 
 		# Invoice totals (after insert, ERPNext has calculated these)
 		inv_net = flt(si.net_total, 2)
 		inv_tax = flt(si.total_taxes_and_charges, 2)
 		inv_gross = flt(si.grand_total, 2)
-		inv_payments = flt(sum(p.amount for p in si.payments), 2)
 
 		errors = []
 
@@ -314,14 +314,7 @@ class POSImport(Document):
 				)
 			)
 
-		# Validate Payments match Grand Total
-		payment_diff = abs(z_payments - inv_payments)
-		if payment_diff > tolerance:
-			errors.append(
-				_("Payments: Z-ticket={0}, Invoice={1}, Diff={2}").format(
-					flt(z_payments, 2), inv_payments, flt(payment_diff, 2)
-				)
-			)
+		# Payment validation skipped - payments are now in separate Payment Entry documents
 
 		if errors:
 			frappe.throw(
