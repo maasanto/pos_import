@@ -14,18 +14,21 @@ class RestomaxParser(BasePOSParser):
 	Parser for Restomax export files (Excel or CSV).
 
 	File format expectations:
-	- Excel or CSV file with columns: N° Z, Date clôture, Compte général, Description, TVA, DEBIT, CREDIT
+	- Excel or CSV file with columns: N° Z, Date clôture, ID Restomax, Compte général, Description, TVA, DEBIT, CREDIT
+	- ID Restomax column contains source codes for item/payment mapping
 	- Lines are duplicated (need deduplication)
 	- Account 700xxx range = revenues (CREDIT column)
 	- Account 451xxx range = VAT collected
 	- Account 580xxx range = payments (DEBIT column)
+
+	IMPORTANT: Restomax export doubles all amounts, so we divide by 2 to get correct values
 	"""
 
 	REVENUE_ACCOUNT_PREFIX = "700"
 	VAT_ACCOUNT_PREFIX = "451"
 	PAYMENT_ACCOUNT_PREFIX = "580"
 
-	REQUIRED_COLUMNS = ["N° Z", "Date clôture", "Compte général", "DEBIT", "CREDIT"]
+	REQUIRED_COLUMNS = ["N° Z", "Date clôture", "Compte général", "DEBIT", "CREDIT", "ID Restomax"]
 
 	def validate_file(self, file_content: bytes) -> tuple[bool, str]:
 		"""Validate that the file is a valid Restomax export."""
@@ -59,9 +62,10 @@ class RestomaxParser(BasePOSParser):
 			report_num = str(report_num).strip()
 
 			account = str(row.get("Compte général") or "").strip()
+			id_restomax = str(row.get("ID Restomax") or "").strip()
 			original_description = str(row.get("Description") or "").strip()
-			# For revenue lines with empty description (TVA D items), use "TVA D" as label
-			description = original_description or "TVA D (0%)"
+			# For revenue lines with empty description, use "Others" as fallback label
+			description = original_description or "Others"
 			debit = self._parse_number(row.get("DEBIT"))
 			credit = self._parse_number(row.get("CREDIT"))
 
@@ -90,10 +94,12 @@ class RestomaxParser(BasePOSParser):
 				):
 					continue
 
-				amount = credit - debit
+				# Restomax doubles all amounts - divide by 2 to get correct values
+				amount = (credit - debit) / 2
 				if amount > 0:
 					reports_data[report_num]["revenues"].append({
 						"account": account,
+						"id_restomax": id_restomax,
 						"description": description,
 						"amount": amount,
 						"tva_rate": tva_rate,
@@ -104,7 +110,12 @@ class RestomaxParser(BasePOSParser):
 				if "total" in original_description.lower():
 					continue
 
-				amount = credit - debit
+				# Skip lines without ID Restomax (summary lines)
+				if not id_restomax:
+					continue
+
+				# Restomax doubles all amounts - divide by 2 to get correct values
+				amount = (credit - debit) / 2
 				if amount != 0:
 					reports_data[report_num]["vat"].append({
 						"account": account,
@@ -118,10 +129,12 @@ class RestomaxParser(BasePOSParser):
 				if original_description.startswith("Total CA") or original_description.startswith("Total PAIEMENT"):
 					continue
 
-				amount = debit - credit
+				# Restomax doubles all amounts - divide by 2 to get correct values
+				amount = (debit - credit) / 2
 				if amount > 0:
 					reports_data[report_num]["payments"].append({
 						"account": account,
+						"id_restomax": id_restomax,
 						"description": description,
 						"amount": amount,
 					})
@@ -146,8 +159,9 @@ class RestomaxParser(BasePOSParser):
 				# The amounts in 700000 accounts are HT (net)
 				net = line_data["amount"]
 
-				# Use description as source_code (for category mapping)
-				source_code = line_data["description"]
+				# Use ID Restomax as source_code (for item mapping)
+				# If empty, fall back to description for unmapped items
+				source_code = line_data["id_restomax"] or line_data["description"]
 
 				# We don't calculate tax here - use actual VAT from vat_by_rate
 				report.lines.append(
@@ -162,10 +176,12 @@ class RestomaxParser(BasePOSParser):
 				)
 
 			for payment_data in data["payments"]:
-				# Use description as source_code for payment mapping
+				# Use ID Restomax as source_code for payment mapping
+				# If empty, fall back to description
+				source_code = payment_data["id_restomax"] or payment_data["description"]
 				report.payments.append(
 					POSPayment(
-						source_code=payment_data["description"],
+						source_code=source_code,
 						source_name=payment_data["description"],
 						amount=payment_data["amount"].quantize(Decimal("0.01")),
 					)

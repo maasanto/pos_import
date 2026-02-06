@@ -38,6 +38,14 @@ class POSImport(Document):
 		for report in reports:
 			row = self._find_or_create_report_row(report)
 
+			# Skip reports with no revenue lines (only summary/total lines)
+			if not report.lines:
+				row.status = "Skipped"
+				row.error_message = "No revenue lines found (only summary lines)"
+				row.db_update()
+				log_messages.append(f"Z-{report.report_number}: Ignoré - Aucune ligne de revenu")
+				continue
+
 			try:
 				self._validate_tax_amounts(report)
 				sales_invoice = self._create_sales_invoice(report, connector)
@@ -344,11 +352,10 @@ class POSImport(Document):
 				)
 				return frappe.get_doc("Sales Invoice", existing.name)
 			else:
-				# Draft exists, cancel and recreate
-				doc = frappe.get_doc("Sales Invoice", existing.name)
-				doc.cancel()
+				# Draft exists, delete and recreate
+				frappe.delete_doc("Sales Invoice", existing.name)
 				frappe.msgprint(
-					_("Cancelled existing draft invoice {0} for {1}").format(existing.name, po_no),
+					_("Deleted existing draft invoice {0} for {1}").format(existing.name, po_no),
 					indicator="orange",
 					alert=True
 				)
