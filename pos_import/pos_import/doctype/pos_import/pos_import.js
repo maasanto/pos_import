@@ -4,6 +4,13 @@
 frappe.ui.form.on("POS Import", {
 	refresh(frm) {
 		frm.trigger("set_buttons");
+		frm.trigger("render_preview");
+	},
+
+	render_preview(frm) {
+		if (frm.doc.preview_data) {
+			frm.get_field("preview_html").$wrapper.html(frm.doc.preview_data);
+		}
 	},
 
 	set_buttons(frm) {
@@ -17,6 +24,14 @@ frappe.ui.form.on("POS Import", {
 
 		if (frm.doc.docstatus === 1) {
 			frm.add_custom_button(__("Reprocess Failed"), () => frm.trigger("reprocess_failed"));
+
+			if (frm.doc.create_draft_invoices) {
+				frm.add_custom_button(
+					__("Create Payment Entries"),
+					() => frm.trigger("create_payment_entries"),
+					__("Actions")
+				);
+			}
 		}
 	},
 
@@ -47,6 +62,18 @@ frappe.ui.form.on("POS Import", {
 			doc: frm.doc,
 			freeze: true,
 			freeze_message: __("Reprocessing failed invoices..."),
+			callback(r) {
+				frm.reload_doc();
+			},
+		});
+	},
+
+	create_payment_entries(frm) {
+		frm.call({
+			method: "create_pending_payment_entries",
+			doc: frm.doc,
+			freeze: true,
+			freeze_message: __("Creating payment entries..."),
 			callback(r) {
 				frm.reload_doc();
 			},

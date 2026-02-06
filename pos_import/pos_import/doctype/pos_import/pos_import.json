@@ -11,7 +11,9 @@
 		"column_break_1",
 		"import_status",
 		"import_file",
+		"create_draft_invoices",
 		"section_preview",
+		"preview_data",
 		"preview_html",
 		"section_reports",
 		"imported_reports",
@@ -62,16 +64,28 @@
 			"reqd": 1
 		},
 		{
-			"depends_on": "eval:doc.preview_html",
+			"default": "0",
+			"fieldname": "create_draft_invoices",
+			"fieldtype": "Check",
+			"label": "Create Draft Invoices",
+			"description": "If checked, invoices will be created as drafts. You can then review and submit them manually, and use the 'Create Payment Entries' button to generate payments."
+		},
+		{
+			"depends_on": "eval:doc.preview_data",
 			"fieldname": "section_preview",
 			"fieldtype": "Section Break",
 			"label": "Preview"
 		},
 		{
+			"fieldname": "preview_data",
+			"fieldtype": "Long Text",
+			"hidden": 1,
+			"label": "Preview Data"
+		},
+		{
 			"fieldname": "preview_html",
 			"fieldtype": "HTML",
-			"label": "Preview",
-			"read_only": 1
+			"label": "Preview"
 		},
 		{
 			"depends_on": "eval:doc.docstatus == 1",

@@ -23,7 +23,7 @@ class POSImport(Document):
 	def validate(self):
 		if not self.import_status:
 			self.import_status = "Pending"
-		if self.import_file and not self.get("preview_html"):
+		if self.import_file and not self.get("preview_data"):
 			self.parse_and_preview()
 
 	def on_submit(self):
@@ -96,7 +96,7 @@ class POSImport(Document):
 		"""Parse file and generate preview HTML."""
 		self.parse_and_preview()
 		self.save()
-		return self.get("preview_html")
+		return self.get("preview_data")
 
 	@frappe.whitelist()
 	def reprocess_failed(self):
@@ -153,10 +153,67 @@ class POSImport(Document):
 		else:
 			import_status = "Partial Success"
 
-		self.db_set("import_status", import_status)
+			self.db_set("import_status", import_status)
 
 		frappe.msgprint(_("Reprocessing complete. Check the import log for details."))
 		return len(log_messages)
+
+	@frappe.whitelist()
+	def create_pending_payment_entries(self):
+		"""Create Payment Entries for submitted invoices that don't have payments yet."""
+		if self.docstatus != 1:
+			frappe.throw(_("Document must be submitted"))
+
+		connector = frappe.get_doc("POS Connector", self.connector)
+		reports = self._parse_file()
+		log_messages = []
+		created_count = 0
+
+		for row in self.imported_reports:
+			if row.status != "Created" or not row.sales_invoice:
+				continue
+
+			si = frappe.get_doc("Sales Invoice", row.sales_invoice)
+			if si.docstatus != 1:
+				continue
+
+			# Check if payment entries already exist for this invoice
+			existing_payments = frappe.get_all(
+				"Payment Entry Reference",
+				filters={
+					"reference_doctype": "Sales Invoice",
+					"reference_name": row.sales_invoice,
+					"docstatus": 1,
+				},
+			)
+			if existing_payments:
+				continue
+
+			# Find the matching report
+			report = next((r for r in reports if r.report_number == row.report_number), None)
+			if not report:
+				log_messages.append(f"Z-{row.report_number}: Report data not found in file")
+				continue
+
+			try:
+				self._create_payment_entries(si, report, connector)
+				created_count += 1
+				log_messages.append(f"Z-{row.report_number}: Payment entries created for {si.name}")
+			except Exception as e:
+				log_messages.append(f"Z-{row.report_number}: Error creating payments - {e}")
+				frappe.log_error(
+					title=f"POS Import Payment Error: {self.name} - Z-{row.report_number}",
+					message=frappe.get_traceback(),
+				)
+
+		if log_messages:
+			self.import_log = (self.import_log or "") + "\n\n--- Payment Entries ---\n" + "\n".join(log_messages)
+			self.db_set("import_log", self.import_log)
+
+		frappe.msgprint(
+			_("{0} payment entries created. Check the import log for details.").format(created_count)
+		)
+		return created_count
 
 	def parse_and_preview(self):
 		"""Parse the file and generate preview data."""
@@ -176,7 +233,7 @@ class POSImport(Document):
 				},
 			)
 
-		self.preview_html = self._render_preview_html(preview_data)
+		self.preview_data = self._render_preview_data(preview_data)
 
 	def _parse_file(self) -> list[POSReport]:
 		"""Parse the uploaded file and return list of reports."""
@@ -435,11 +492,9 @@ class POSImport(Document):
 		# Validate invoice amounts against Z-ticket before submission
 		self._validate_invoice_against_z_ticket(si, report)
 
-		# Submit only if not creating drafts
-		if not connector.create_draft_invoices:
+			# Submit only if not creating drafts
+		if not self.create_draft_invoices:
 			si.submit()
-
-			# Create Payment Entries after submission
 			self._create_payment_entries(si, report, connector)
 
 		return si
@@ -506,7 +561,7 @@ class POSImport(Document):
 			pe.insert(ignore_permissions=True)
 			pe.submit()
 
-	def _render_preview_html(self, preview_data: dict) -> str:
+	def _render_preview_data(self, preview_data: dict) -> str:
 		"""Render preview data as HTML."""
 		currency = frappe.get_cached_value("Company", self.company, "default_currency") or "EUR"
 
