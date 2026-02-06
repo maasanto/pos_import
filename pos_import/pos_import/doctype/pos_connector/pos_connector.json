@@ -17,6 +17,7 @@
 		"column_break_2",
 		"default_income_account",
 		"default_tax_account",
+		"create_draft_invoices",
 		"section_item_mapping",
 		"item_mapping",
 		"section_payment_mapping",
@@ -98,6 +99,12 @@
 			"label": "Default Tax Account",
 			"options": "Account",
 			"reqd": 1
+		},
+		{
+			"default": "0",
+			"fieldname": "create_draft_invoices",
+			"fieldtype": "Check",
+			"label": "Create Sales Invoices as Draft"
 		},
 		{
 			"fieldname": "section_item_mapping",

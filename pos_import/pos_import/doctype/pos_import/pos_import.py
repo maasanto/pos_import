@@ -445,7 +445,9 @@ class POSImport(Document):
 		# Validate invoice amounts against Z-ticket before submission
 		self._validate_invoice_against_z_ticket(si, report)
 
-		si.submit()
+		# Submit only if not creating drafts
+		if not connector.create_draft_invoices:
+			si.submit()
 
 		return si
 
