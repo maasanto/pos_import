@@ -378,7 +378,7 @@ class POSImport(Document):
 		si.currency = company_currency
 		si.posting_date = report.report_date
 		si.set_posting_time = 1
-		si.is_pos = 1
+		si.is_pos = 0
 		si.update_stock = 0
 		if cash_account:
 			si.account_for_change_amount = cash_account
