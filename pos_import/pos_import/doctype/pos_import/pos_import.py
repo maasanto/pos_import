@@ -405,11 +405,15 @@ class POSImport(Document):
 
 			item = frappe.get_doc("Item", item_code)
 
+			# Determine UOM: use connector default, or fallback to item's selling/stock UOM
+			uom = connector.default_uom or item.sales_uom or item.stock_uom
+
 			si.append("items", {
 				"item_code": item.name,
 				"item_name": item.item_name,
 				"description": line.description or item.description,
 				"qty": 1,
+				"uom": uom,
 				"rate": float(line.net_amount),
 				"income_account": connector.default_income_account,
 				"cost_center": cost_center,

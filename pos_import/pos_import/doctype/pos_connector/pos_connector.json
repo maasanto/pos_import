@@ -20,6 +20,7 @@
 		"create_draft_invoices",
 		"section_item_mapping",
 		"default_unmapped_item",
+		"default_uom",
 		"item_mapping",
 		"section_payment_mapping",
 		"payment_mapping"
@@ -118,6 +119,13 @@
 			"fieldtype": "Link",
 			"label": "Default Item for Unmapped Codes",
 			"options": "Item"
+		},
+		{
+			"description": "Unit of Measure to use for invoice items. Falls back to item's default selling UOM if not specified.",
+			"fieldname": "default_uom",
+			"fieldtype": "Link",
+			"label": "Default UOM",
+			"options": "UOM"
 		},
 		{
 			"fieldname": "item_mapping",
