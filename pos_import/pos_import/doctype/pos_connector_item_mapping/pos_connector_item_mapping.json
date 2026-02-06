@@ -8,6 +8,7 @@
 		"source_code",
 		"source_name",
 		"item",
+		"uom",
 		"item_tax_template",
 		"income_account"
 	],
@@ -32,6 +33,14 @@
 			"label": "Item",
 			"options": "Item",
 			"reqd": 1
+		},
+		{
+			"description": "Unit of Measure for this item. Falls back to item's default selling UOM if not specified.",
+			"fieldname": "uom",
+			"fieldtype": "Link",
+			"in_list_view": 1,
+			"label": "UOM",
+			"options": "UOM"
 		},
 		{
 			"fieldname": "item_tax_template",

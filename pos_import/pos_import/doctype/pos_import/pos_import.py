@@ -395,7 +395,11 @@ class POSImport(Document):
 
 		# Add items from lines - just HT amounts, no tax calculation
 		for line in report.lines:
-			item_code = connector.get_item_for_source_code(line.source_code)
+			# Get item mapping (may be None if using default_unmapped_item)
+			item_mapping = connector.get_item_mapping(line.source_code)
+
+			# Get item code from mapping or fallback to default unmapped item
+			item_code = item_mapping.item if item_mapping else connector.default_unmapped_item
 			if not item_code:
 				frappe.throw(
 					_(
@@ -405,8 +409,8 @@ class POSImport(Document):
 
 			item = frappe.get_doc("Item", item_code)
 
-			# Determine UOM: use connector default, or fallback to item's selling/stock UOM
-			uom = connector.default_uom or item.sales_uom or item.stock_uom
+			# Determine UOM: use mapping UOM, or fallback to item's selling/stock UOM
+			uom = (item_mapping.uom if item_mapping and item_mapping.uom else None) or item.sales_uom or item.stock_uom
 
 			si.append("items", {
 				"item_code": item.name,
