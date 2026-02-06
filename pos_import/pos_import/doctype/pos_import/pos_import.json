@@ -69,7 +69,7 @@
 		},
 		{
 			"fieldname": "preview_html",
-			"fieldtype": "Long Text",
+			"fieldtype": "HTML",
 			"label": "Preview",
 			"read_only": 1
 		},
