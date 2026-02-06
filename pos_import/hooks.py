@@ -5,10 +5,7 @@ app_description = "Import POS reports into Dokos"
 app_email = "hello@dokos.io"
 app_license = "gpl-3.0"
 
-# Apps
-# ------------------
-
-# required_apps = []
+required_apps = ["erpnext"]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -86,8 +83,7 @@ app_license = "gpl-3.0"
 # Installation
 # ------------
 
-# before_install = "pos_import.install.before_install"
-# after_install = "pos_import.install.after_install"
+after_install = "pos_import.pos_import.setup.after_install"
 
 # Uninstallation
 # ------------

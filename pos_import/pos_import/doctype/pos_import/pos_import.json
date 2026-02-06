@@ -1,0 +1,148 @@
+{
+	"actions": [],
+	"autoname": "format:POSIMP-{connector_code}-{####}",
+	"creation": "2025-01-23 12:00:00.000000",
+	"doctype": "DocType",
+	"engine": "InnoDB",
+	"field_order": [
+		"connector",
+		"connector_code",
+		"company",
+		"column_break_1",
+		"import_file",
+		"section_preview",
+		"preview_html",
+		"section_reports",
+		"imported_reports",
+		"section_log",
+		"import_log"
+	],
+	"fields": [
+		{
+			"fieldname": "connector",
+			"fieldtype": "Link",
+			"in_list_view": 1,
+			"label": "POS Connector",
+			"options": "POS Connector",
+			"reqd": 1,
+			"set_only_once": 1
+		},
+		{
+			"fetch_from": "connector.connector_code",
+			"fieldname": "connector_code",
+			"fieldtype": "Data",
+			"label": "Connector Code",
+			"read_only": 1
+		},
+		{
+			"fetch_from": "connector.company",
+			"fieldname": "company",
+			"fieldtype": "Link",
+			"label": "Company",
+			"options": "Company",
+			"read_only": 1
+		},
+		{
+			"fieldname": "column_break_1",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "import_file",
+			"fieldtype": "Attach",
+			"label": "Import File",
+			"reqd": 1
+		},
+		{
+			"depends_on": "eval:doc.preview_html",
+			"fieldname": "section_preview",
+			"fieldtype": "Section Break",
+			"label": "Preview"
+		},
+		{
+			"fieldname": "preview_html",
+			"fieldtype": "Long Text",
+			"label": "Preview",
+			"read_only": 1
+		},
+		{
+			"depends_on": "eval:doc.docstatus == 1",
+			"fieldname": "section_reports",
+			"fieldtype": "Section Break",
+			"label": "Imported Reports"
+		},
+		{
+			"fieldname": "imported_reports",
+			"fieldtype": "Table",
+			"label": "Imported Reports",
+			"options": "POS Import Report",
+			"read_only": 1
+		},
+		{
+			"collapsible": 1,
+			"fieldname": "section_log",
+			"fieldtype": "Section Break",
+			"label": "Import Log"
+		},
+		{
+			"fieldname": "import_log",
+			"fieldtype": "Long Text",
+			"label": "Import Log",
+			"read_only": 1
+		}
+	],
+	"index_web_pages_for_search": 1,
+	"is_submittable": 1,
+	"links": [],
+	"modified": "2025-01-23 12:00:00.000000",
+	"modified_by": "Administrator",
+	"module": "POS Import",
+	"name": "POS Import",
+	"naming_rule": "Expression",
+	"owner": "Administrator",
+	"permissions": [
+		{
+			"cancel": 1,
+			"create": 1,
+			"delete": 1,
+			"email": 1,
+			"export": 1,
+			"print": 1,
+			"read": 1,
+			"report": 1,
+			"role": "Accounts Manager",
+			"share": 1,
+			"submit": 1,
+			"write": 1
+		},
+		{
+			"create": 1,
+			"email": 1,
+			"export": 1,
+			"print": 1,
+			"read": 1,
+			"report": 1,
+			"role": "Accounts User",
+			"share": 1,
+			"submit": 1,
+			"write": 1
+		},
+		{
+			"cancel": 1,
+			"create": 1,
+			"delete": 1,
+			"email": 1,
+			"export": 1,
+			"print": 1,
+			"read": 1,
+			"report": 1,
+			"role": "System Manager",
+			"share": 1,
+			"submit": 1,
+			"write": 1
+		}
+	],
+	"sort_field": "creation",
+	"sort_order": "DESC",
+	"states": [],
+	"track_changes": 1
+}
