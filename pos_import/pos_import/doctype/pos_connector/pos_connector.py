@@ -30,9 +30,16 @@ class POSConnector(Document):
 		return parser_class(self)
 
 	def get_item_for_source_code(self, source_code: str) -> str | None:
-		"""Get the mapped Item for a source code."""
+		"""Get the mapped Item for a source code.
+
+		Falls back to default_unmapped_item if no mapping is found.
+		"""
 		mapping = self.get_item_mapping(source_code)
-		return mapping.item if mapping else None
+		if mapping:
+			return mapping.item
+
+		# Use default unmapped item as fallback
+		return self.default_unmapped_item if self.default_unmapped_item else None
 
 	def get_item_mapping(self, source_code: str):
 		"""Get the full item mapping for a source code."""

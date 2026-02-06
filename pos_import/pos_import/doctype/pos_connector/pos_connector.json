@@ -19,6 +19,7 @@
 		"default_tax_account",
 		"create_draft_invoices",
 		"section_item_mapping",
+		"default_unmapped_item",
 		"item_mapping",
 		"section_payment_mapping",
 		"payment_mapping"
@@ -110,6 +111,13 @@
 			"fieldname": "section_item_mapping",
 			"fieldtype": "Section Break",
 			"label": "Item Mapping"
+		},
+		{
+			"description": "Item to use when no mapping is found for a source code",
+			"fieldname": "default_unmapped_item",
+			"fieldtype": "Link",
+			"label": "Default Item for Unmapped Codes",
+			"options": "Item"
 		},
 		{
 			"fieldname": "item_mapping",
