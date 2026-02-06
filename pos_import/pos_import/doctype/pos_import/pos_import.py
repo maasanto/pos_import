@@ -569,12 +569,21 @@ class POSImport(Document):
 		# Submit only if not creating drafts
 		if not self.create_draft_invoices:
 			si.submit()
-			self._create_payment_entries(si, report, connector)
+
+		# Create Payment Entries (as draft or submitted based on connector setting)
+		self._create_payment_entries(si, report, connector, as_draft=self.create_draft_invoices)
 
 		return si, False
 
-	def _create_payment_entries(self, sales_invoice, report, connector):
-		"""Create Payment Entry documents for each payment in the Z-ticket."""
+	def _create_payment_entries(self, sales_invoice, report, connector, as_draft=False):
+		"""Create Payment Entry documents for each payment in the Z-ticket.
+
+		Args:
+			sales_invoice: The Sales Invoice to link payments to
+			report: The POSReport containing payment data
+			connector: The POS Connector configuration
+			as_draft: If True, create Payment Entries as drafts (don't submit)
+		"""
 		for payment in report.payments:
 			mode_of_payment = connector.get_mode_of_payment_for_source_code(payment.source_code)
 			if not mode_of_payment:
@@ -633,7 +642,8 @@ class POSImport(Document):
 			)
 
 			pe.insert(ignore_permissions=True)
-			pe.submit()
+			if not as_draft:
+				pe.submit()
 
 	def _render_preview_data(self, preview_data: dict) -> str:
 		"""Render preview data as HTML."""
