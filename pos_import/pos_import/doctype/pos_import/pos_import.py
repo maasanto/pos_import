@@ -568,6 +568,8 @@ class POSImport(Document):
 		reports_html = ""
 		for r in preview_data["reports"]:
 			date_str = str(r["report_date"]) if r["report_date"] else ""
+			net_str = f"{r['total_net']:.2f} {currency}"
+			tax_str = f"{r['total_tax']:.2f} {currency}"
 			total_str = f"{r['total_gross']:.2f} {currency}"
 			reports_html += f"""
 			<tr>
@@ -575,6 +577,8 @@ class POSImport(Document):
 				<td>{date_str}</td>
 				<td>{r['line_count']}</td>
 				<td>{r['payment_count']}</td>
+				<td class="text-right">{net_str}</td>
+				<td class="text-right">{tax_str}</td>
 				<td class="text-right">{total_str}</td>
 			</tr>
 			"""
@@ -627,7 +631,9 @@ class POSImport(Document):
 						<th>{_('Date')}</th>
 						<th>{_('Lines')}</th>
 						<th>{_('Payments')}</th>
-						<th class="text-right">{_('Total')}</th>
+						<th class="text-right">{_('HT')}</th>
+						<th class="text-right">{_('VAT')}</th>
+						<th class="text-right">{_('TTC')}</th>
 					</tr>
 				</thead>
 				<tbody>
