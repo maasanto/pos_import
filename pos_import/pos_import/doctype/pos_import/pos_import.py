@@ -583,30 +583,39 @@ class POSImport(Document):
 		total_tax_str = f"{preview_data['total_tax']:.2f} {currency}"
 
 		return f"""
+		<style>
+			.pos-import-preview .stat-card {{
+				background: var(--card-bg);
+				border: 1px solid var(--border-color);
+				border-radius: var(--border-radius);
+				padding: 1rem;
+				text-align: center;
+			}}
+			.pos-import-preview .stat-card h3 {{
+				color: var(--text-color);
+			}}
+			.pos-import-preview .stat-card p {{
+				color: var(--text-muted);
+			}}
+		</style>
 		<div class="pos-import-preview">
 			<div class="row mb-4">
 				<div class="col-md-4">
-					<div class="card">
-						<div class="card-body text-center">
-							<h3 class="mb-0">{preview_data['total_reports']}</h3>
-							<p class="text-muted mb-0">{_('Reports')}</p>
-						</div>
+					<div class="stat-card">
+						<h3 class="mb-0">{preview_data['total_reports']}</h3>
+						<p class="mb-0">{_('Reports')}</p>
 					</div>
 				</div>
 				<div class="col-md-4">
-					<div class="card">
-						<div class="card-body text-center">
-							<h3 class="mb-0">{total_revenue_str}</h3>
-							<p class="text-muted mb-0">{_('Total Revenue')}</p>
-						</div>
+					<div class="stat-card">
+						<h3 class="mb-0">{total_revenue_str}</h3>
+						<p class="mb-0">{_('Total Revenue')}</p>
 					</div>
 				</div>
 				<div class="col-md-4">
-					<div class="card">
-						<div class="card-body text-center">
-							<h3 class="mb-0">{total_tax_str}</h3>
-							<p class="text-muted mb-0">{_('Total Tax')}</p>
-						</div>
+					<div class="stat-card">
+						<h3 class="mb-0">{total_tax_str}</h3>
+						<p class="mb-0">{_('Total Tax')}</p>
 					</div>
 				</div>
 			</div>
