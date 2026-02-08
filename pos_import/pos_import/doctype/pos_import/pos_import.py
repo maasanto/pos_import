@@ -609,7 +609,7 @@ class POSImport(Document):
 				<div class="col-md-4">
 					<div class="stat-card">
 						<h3 class="mb-0">{total_revenue_str}</h3>
-						<p class="mb-0">{_('Total Revenue')}</p>
+						<p class="mb-0">{_('Total Revenue (excl. tax)')}</p>
 					</div>
 				</div>
 				<div class="col-md-4">

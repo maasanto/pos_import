@@ -99,7 +99,7 @@ class BasePOSParser(ABC):
 		"""Generate preview data for UI display."""
 		return {
 			"total_reports": len(reports),
-			"total_revenue": float(sum(r.total_gross for r in reports)),
+			"total_revenue": float(sum(r.total_net for r in reports)),
 			"total_tax": float(sum(r.total_tax for r in reports)),
 			"total_payments": float(sum(r.total_payments for r in reports)),
 			"reports": [
