@@ -18,9 +18,6 @@ frappe.ui.form.on("POS Import", {
 			return;
 		}
 
-		if (frm.doc.docstatus === 0 && frm.doc.import_file) {
-			frm.add_custom_button(__("Preview"), () => frm.trigger("preview_file"));
-		}
 
 		if (frm.doc.docstatus === 1) {
 			frm.add_custom_button(__("Reprocess Failed"), () => frm.trigger("reprocess_failed"));
