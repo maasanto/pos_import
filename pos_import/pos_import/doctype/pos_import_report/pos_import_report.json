@@ -52,7 +52,7 @@
 			"fieldtype": "Select",
 			"in_list_view": 1,
 			"label": "Status",
-			"options": "Pending\nCreated\nError",
+			"options": "Pending\nCreated\nAlready Exists\nSkipped\nError",
 			"read_only": 1
 		},
 		{

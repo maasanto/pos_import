@@ -46,14 +46,22 @@ class POSImport(Document):
 				log_messages.append(f"Z-{report.report_number}: Ignoré - Aucune ligne de revenu")
 				continue
 
-			try:
+				try:
 				self._validate_tax_amounts(report)
-				sales_invoice = self._create_sales_invoice(report, connector)
+				sales_invoice, already_existed = self._create_sales_invoice(report, connector)
 
 				row.sales_invoice = sales_invoice.name
-				row.status = "Created"
+				if already_existed:
+					row.status = "Already Exists"
+					log_messages.append(
+						f"Z-{report.report_number}: Facture {sales_invoice.name} existe déjà"
+					)
+				else:
+					row.status = "Created"
+					log_messages.append(
+						f"Z-{report.report_number}: Facture {sales_invoice.name} créée"
+					)
 				row.db_update()
-				log_messages.append(f"Z-{report.report_number}: Facture {sales_invoice.name} créée")
 				success_count += 1
 
 			except Exception as e:
@@ -116,13 +124,21 @@ class POSImport(Document):
 
 				try:
 					self._validate_tax_amounts(report)
-					sales_invoice = self._create_sales_invoice(report, connector)
+					sales_invoice, already_existed = self._create_sales_invoice(report, connector)
 
 					row.sales_invoice = sales_invoice.name
-					row.status = "Created"
 					row.error_message = None
+					if already_existed:
+						row.status = "Already Exists"
+						log_messages.append(
+							f"Z-{report.report_number}: Facture {sales_invoice.name} existe déjà"
+						)
+					else:
+						row.status = "Created"
+						log_messages.append(
+							f"Z-{report.report_number}: Facture {sales_invoice.name} créée"
+						)
 					row.db_update()
-					log_messages.append(f"Z-{report.report_number}: Facture {sales_invoice.name} créée")
 
 				except Exception as e:
 					row.status = "Error"
@@ -140,7 +156,7 @@ class POSImport(Document):
 
 		# Recalculate overall status based on all reports
 		self.reload()
-		success_count = sum(1 for row in self.imported_reports if row.status == "Created")
+			success_count = sum(1 for row in self.imported_reports if row.status in ("Created", "Already Exists"))
 		error_count = sum(1 for row in self.imported_reports if row.status in ("Error", "Pending"))
 		total = len(self.imported_reports)
 
@@ -392,15 +408,9 @@ class POSImport(Document):
 			as_dict=True
 		)
 
-		if existing:
+			if existing:
 			if existing.docstatus == 1:
-				# Already submitted, return existing
-				frappe.msgprint(
-					_("Sales Invoice {0} already exists for {1}").format(existing.name, po_no),
-					indicator="orange",
-					alert=True
-				)
-				return frappe.get_doc("Sales Invoice", existing.name)
+				return frappe.get_doc("Sales Invoice", existing.name), True
 			else:
 				# Draft exists, delete and recreate
 				frappe.delete_doc("Sales Invoice", existing.name)
@@ -497,7 +507,7 @@ class POSImport(Document):
 			si.submit()
 			self._create_payment_entries(si, report, connector)
 
-		return si
+		return si, False
 
 	def _create_payment_entries(self, sales_invoice, report, connector):
 		"""Create Payment Entry documents for each payment in the Z-ticket."""
