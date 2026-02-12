@@ -92,35 +92,40 @@ class POSImport(Document):
 		self.db_set("import_status", import_status)
 
 	def on_cancel(self):
-		"""Cancel all linked Sales Invoices and their Payment Entries."""
+		"""Delete draft Sales Invoices on cancel. Submitted invoices are left untouched."""
 		for row in self.imported_reports:
 			if not row.sales_invoice:
 				continue
 
-			si = frappe.get_doc("Sales Invoice", row.sales_invoice)
-
-			if si.docstatus == 1:
-				self._cancel_linked_payment_entries(row.sales_invoice)
-				si.cancel()
-			elif si.docstatus == 0:
+			si_docstatus = frappe.db.get_value("Sales Invoice", row.sales_invoice, "docstatus")
+			if si_docstatus == 0:
 				frappe.delete_doc("Sales Invoice", row.sales_invoice)
 
-	def _cancel_linked_payment_entries(self, sales_invoice_name):
-		"""Cancel all Payment Entries referencing a Sales Invoice."""
-		payment_entries = frappe.get_all(
-			"Payment Entry Reference",
-			filters={
-				"reference_doctype": "Sales Invoice",
-				"reference_name": sales_invoice_name,
-				"docstatus": 1,
-			},
-			fields=["parent"],
-		)
+	@frappe.whitelist()
+	def delete_draft_invoices(self):
+		"""Delete all draft Sales Invoices linked to this import."""
+		if self.docstatus != 1:
+			frappe.throw(_("Document must be submitted"))
 
-		for ref in payment_entries:
-			pe = frappe.get_doc("Payment Entry", ref.parent)
-			if pe.docstatus == 1:
-				pe.cancel()
+		deleted = []
+		for row in self.imported_reports:
+			if not row.sales_invoice:
+				continue
+
+			si_docstatus = frappe.db.get_value("Sales Invoice", row.sales_invoice, "docstatus")
+			if si_docstatus == 0:
+				frappe.delete_doc("Sales Invoice", row.sales_invoice)
+				deleted.append(row.sales_invoice)
+				row.sales_invoice = None
+				row.status = "Pending"
+				row.db_update()
+
+		if deleted:
+			self.import_log = (self.import_log or "") + f"\n\n--- Deleted {len(deleted)} draft invoices ---\n" + "\n".join(deleted)
+			self.db_set("import_log", self.import_log)
+
+		frappe.msgprint(_("{0} draft invoices deleted.").format(len(deleted)))
+		return len(deleted)
 
 	@frappe.whitelist()
 	def preview_import(self):

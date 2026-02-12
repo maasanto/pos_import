@@ -20,12 +20,21 @@ frappe.ui.form.on("POS Import", {
 
 
 		if (frm.doc.docstatus === 1) {
-			frm.add_custom_button(__("Reprocess Failed"), () => frm.trigger("reprocess_failed"));
+			frm.add_custom_button(
+				__("Reprocess Failed"),
+				() => frm.trigger("reprocess_failed"),
+				__("Actions")
+			);
 
 			if (frm.doc.create_draft_invoices) {
 				frm.add_custom_button(
 					__("Create Payment Entries"),
 					() => frm.trigger("create_payment_entries"),
+					__("Actions")
+				);
+				frm.add_custom_button(
+					__("Delete Draft Invoices"),
+					() => frm.trigger("delete_drafts"),
 					__("Actions")
 				);
 			}
@@ -63,6 +72,23 @@ frappe.ui.form.on("POS Import", {
 				frm.reload_doc();
 			},
 		});
+	},
+
+	delete_drafts(frm) {
+		frappe.confirm(
+			__("Delete all draft invoices linked to this import?"),
+			() => {
+				frm.call({
+					method: "delete_draft_invoices",
+					doc: frm.doc,
+					freeze: true,
+					freeze_message: __("Deleting draft invoices..."),
+					callback(r) {
+						frm.reload_doc();
+					},
+				});
+			}
+		);
 	},
 
 	create_payment_entries(frm) {
