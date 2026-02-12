@@ -92,12 +92,35 @@ class POSImport(Document):
 		self.db_set("import_status", import_status)
 
 	def on_cancel(self):
-		"""Cancel all linked Sales Invoices."""
+		"""Cancel all linked Sales Invoices and their Payment Entries."""
 		for row in self.imported_reports:
-			if row.sales_invoice:
-				si = frappe.get_doc("Sales Invoice", row.sales_invoice)
-				if si.docstatus == 1:
-					si.cancel()
+			if not row.sales_invoice:
+				continue
+
+			si = frappe.get_doc("Sales Invoice", row.sales_invoice)
+
+			if si.docstatus == 1:
+				self._cancel_linked_payment_entries(row.sales_invoice)
+				si.cancel()
+			elif si.docstatus == 0:
+				frappe.delete_doc("Sales Invoice", row.sales_invoice)
+
+	def _cancel_linked_payment_entries(self, sales_invoice_name):
+		"""Cancel all Payment Entries referencing a Sales Invoice."""
+		payment_entries = frappe.get_all(
+			"Payment Entry Reference",
+			filters={
+				"reference_doctype": "Sales Invoice",
+				"reference_name": sales_invoice_name,
+				"docstatus": 1,
+			},
+			fields=["parent"],
+		)
+
+		for ref in payment_entries:
+			pe = frappe.get_doc("Payment Entry", ref.parent)
+			if pe.docstatus == 1:
+				pe.cancel()
 
 	@frappe.whitelist()
 	def preview_import(self):
