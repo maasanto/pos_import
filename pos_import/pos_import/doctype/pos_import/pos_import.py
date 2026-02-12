@@ -500,10 +500,13 @@ class POSImport(Document):
 		# Use configured tax account from connector
 		tax_account = connector.default_tax_account
 
+		selling_price_list = frappe.db.get_single_value("Selling Settings", "selling_price_list") or "Standard Selling"
+
 		si = frappe.new_doc("Sales Invoice")
 		si.customer = connector.default_customer
 		si.company = connector.company
 		si.currency = company_currency
+		si.selling_price_list = selling_price_list
 		si.posting_date = report.report_date
 		si.set_posting_time = 1
 		si.is_pos = 0
