@@ -25,19 +25,16 @@ frappe.ui.form.on("POS Import", {
 				() => frm.trigger("reprocess_failed"),
 				__("Actions")
 			);
-
-			if (frm.doc.create_draft_invoices) {
-				frm.add_custom_button(
-					__("Create Payment Entries"),
-					() => frm.trigger("create_payment_entries"),
-					__("Actions")
-				);
-				frm.add_custom_button(
-					__("Delete Draft Invoices"),
-					() => frm.trigger("delete_drafts"),
-					__("Actions")
-				);
-			}
+			frm.add_custom_button(
+				__("Create Payment Entries"),
+				() => frm.trigger("create_payment_entries"),
+				__("Actions")
+			);
+			frm.add_custom_button(
+				__("Delete Draft Invoices"),
+				() => frm.trigger("delete_drafts"),
+				__("Actions")
+			);
 		}
 	},
 
