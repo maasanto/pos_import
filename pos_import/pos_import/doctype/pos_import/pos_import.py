@@ -46,7 +46,7 @@ class POSImport(Document):
 				log_messages.append(f"Z-{report.report_number}: Ignoré - Aucune ligne de revenu")
 				continue
 
-				try:
+			try:
 				self._validate_tax_amounts(report)
 				sales_invoice, already_existed = self._create_sales_invoice(report, connector)
 
@@ -156,7 +156,7 @@ class POSImport(Document):
 
 		# Recalculate overall status based on all reports
 		self.reload()
-			success_count = sum(1 for row in self.imported_reports if row.status in ("Created", "Already Exists"))
+		success_count = sum(1 for row in self.imported_reports if row.status in ("Created", "Already Exists"))
 		error_count = sum(1 for row in self.imported_reports if row.status in ("Error", "Pending"))
 		total = len(self.imported_reports)
 
@@ -169,7 +169,7 @@ class POSImport(Document):
 		else:
 			import_status = "Partial Success"
 
-			self.db_set("import_status", import_status)
+		self.db_set("import_status", import_status)
 
 		frappe.msgprint(_("Reprocessing complete. Check the import log for details."))
 		return len(log_messages)
@@ -408,7 +408,7 @@ class POSImport(Document):
 			as_dict=True
 		)
 
-			if existing:
+		if existing:
 			if existing.docstatus == 1:
 				return frappe.get_doc("Sales Invoice", existing.name), True
 			else:
@@ -502,7 +502,7 @@ class POSImport(Document):
 		# Validate invoice amounts against Z-ticket before submission
 		self._validate_invoice_against_z_ticket(si, report)
 
-			# Submit only if not creating drafts
+		# Submit only if not creating drafts
 		if not self.create_draft_invoices:
 			si.submit()
 			self._create_payment_entries(si, report, connector)
