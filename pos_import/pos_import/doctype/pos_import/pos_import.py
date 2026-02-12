@@ -99,7 +99,10 @@ class POSImport(Document):
 
 			si_docstatus = frappe.db.get_value("Sales Invoice", row.sales_invoice, "docstatus")
 			if si_docstatus == 0:
-				frappe.delete_doc("Sales Invoice", row.sales_invoice)
+				si_name = row.sales_invoice
+				row.sales_invoice = None
+				row.db_update()
+				frappe.delete_doc("Sales Invoice", si_name)
 
 	@frappe.whitelist()
 	def delete_draft_invoices(self):
@@ -114,11 +117,12 @@ class POSImport(Document):
 
 			si_docstatus = frappe.db.get_value("Sales Invoice", row.sales_invoice, "docstatus")
 			if si_docstatus == 0:
-				frappe.delete_doc("Sales Invoice", row.sales_invoice)
-				deleted.append(row.sales_invoice)
+				si_name = row.sales_invoice
 				row.sales_invoice = None
 				row.status = "Pending"
 				row.db_update()
+				frappe.delete_doc("Sales Invoice", si_name)
+				deleted.append(si_name)
 
 		if deleted:
 			self.import_log = (self.import_log or "") + f"\n\n--- Deleted {len(deleted)} draft invoices ---\n" + "\n".join(deleted)
@@ -214,10 +218,15 @@ class POSImport(Document):
 		created_count = 0
 
 		for row in self.imported_reports:
-			if row.status != "Created" or not row.sales_invoice:
+			if row.status not in ("Created", "Already Exists") or not row.report_number:
 				continue
 
-			si = frappe.get_doc("Sales Invoice", row.sales_invoice)
+			# Resolve current invoice name via po_no (stable across renames)
+			si_name = self._resolve_invoice_name(row)
+			if not si_name:
+				continue
+
+			si = frappe.get_doc("Sales Invoice", si_name)
 			if si.docstatus != 1:
 				continue
 
@@ -226,7 +235,7 @@ class POSImport(Document):
 				"Payment Entry Reference",
 				filters={
 					"reference_doctype": "Sales Invoice",
-					"reference_name": row.sales_invoice,
+					"reference_name": si_name,
 					"docstatus": 1,
 				},
 			)
@@ -304,6 +313,30 @@ class POSImport(Document):
 			content = content.encode("utf-8")
 
 		return content
+
+	def _resolve_invoice_name(self, row):
+		"""Resolve the current Sales Invoice name for a report row.
+
+		Draft invoices get hash names that change when submitted (naming series).
+		This looks up by po_no (Z-{report_number}) which is stable, and updates
+		the stored reference if it has changed.
+		"""
+		po_no = f"Z-{row.report_number}"
+		si_name = frappe.db.get_value(
+			"Sales Invoice",
+			{"po_no": po_no, "company": self.company, "docstatus": ["!=", 2]},
+			"name",
+		)
+
+		if not si_name:
+			return None
+
+		# Update stale reference in child table
+		if row.sales_invoice != si_name:
+			row.sales_invoice = si_name
+			row.db_update()
+
+		return si_name
 
 	def _find_or_create_report_row(self, report: POSReport):
 		"""Find existing report row or create a new one."""
