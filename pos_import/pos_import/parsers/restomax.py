@@ -16,12 +16,13 @@ class RestomaxParser(BasePOSParser):
 	File format expectations:
 	- Excel or CSV file with columns: N° Z, Date clôture, ID Restomax, Compte général, Description, TVA, DEBIT, CREDIT
 	- ID Restomax column contains source codes for item/payment mapping
-	- Lines are duplicated (need deduplication)
 	- Account 700xxx range = revenues (CREDIT column)
 	- Account 451xxx range = VAT collected
 	- Account 580xxx range = payments (DEBIT column)
 
-	IMPORTANT: Restomax export doubles all amounts, so we divide by 2 to get correct values
+	Restomax exports typically duplicate every row and double all amounts.
+	However, some Z-tickets may have single (non-duplicated) rows with correct amounts.
+	The parser counts occurrences of each line and divides by the actual count.
 	"""
 
 	REVENUE_ACCOUNT_PREFIX = "700"
@@ -51,6 +52,22 @@ class RestomaxParser(BasePOSParser):
 		"""Parse the Restomax file and return a list of POS reports."""
 		rows = self._read_file(file_content)
 
+		# First pass: count occurrences of each line to detect duplication
+		line_counts: dict[tuple, int] = {}
+		for row in rows:
+			report_num = row.get("N° Z")
+			if not report_num:
+				continue
+
+			account = str(row.get("Compte général") or "").strip()
+			original_description = str(row.get("Description") or "").strip()
+			debit = self._parse_number(row.get("DEBIT"))
+			credit = self._parse_number(row.get("CREDIT"))
+
+			line_key = (str(report_num).strip(), account, original_description, str(debit), str(credit))
+			line_counts[line_key] = line_counts.get(line_key, 0) + 1
+
+		# Second pass: process unique lines, dividing by occurrence count
 		reports_data: dict = {}
 		seen_lines: set[tuple] = set()
 
@@ -64,7 +81,6 @@ class RestomaxParser(BasePOSParser):
 			account = str(row.get("Compte général") or "").strip()
 			id_restomax = str(row.get("ID Restomax") or "").strip()
 			original_description = str(row.get("Description") or "").strip()
-			# For revenue lines with empty description, use "Others" as fallback label
 			description = original_description or "Others"
 			debit = self._parse_number(row.get("DEBIT"))
 			credit = self._parse_number(row.get("CREDIT"))
@@ -74,6 +90,9 @@ class RestomaxParser(BasePOSParser):
 			if line_key in seen_lines:
 				continue
 			seen_lines.add(line_key)
+
+			# Divide by occurrence count (1 for single lines, 2 for duplicated)
+			divisor = line_counts[line_key]
 
 			if report_num not in reports_data:
 				reports_data[report_num] = {
@@ -86,7 +105,6 @@ class RestomaxParser(BasePOSParser):
 			tva_rate = self._parse_number(row.get("TVA"))
 
 			if account.startswith(self.REVENUE_ACCOUNT_PREFIX):
-				# Skip total/summary lines by keyword
 				description_lower = original_description.lower()
 				if any(
 					keyword in description_lower
@@ -94,8 +112,7 @@ class RestomaxParser(BasePOSParser):
 				):
 					continue
 
-				# Restomax doubles all amounts - divide by 2 to get correct values
-				amount = (credit - debit) / 2
+				amount = (credit - debit) / divisor
 				if amount > 0:
 					reports_data[report_num]["revenues"].append({
 						"account": account,
@@ -106,16 +123,13 @@ class RestomaxParser(BasePOSParser):
 					})
 
 			elif account.startswith(self.VAT_ACCOUNT_PREFIX):
-				# VAT collected (451000 accounts) - these are the actual VAT amounts
 				if "total" in original_description.lower():
 					continue
 
-				# Skip lines without ID Restomax (summary lines)
 				if not id_restomax:
 					continue
 
-				# Restomax doubles all amounts - divide by 2 to get correct values
-				amount = (credit - debit) / 2
+				amount = (credit - debit) / divisor
 				if amount != 0:
 					reports_data[report_num]["vat"].append({
 						"account": account,
@@ -125,12 +139,10 @@ class RestomaxParser(BasePOSParser):
 					})
 
 			elif account.startswith(self.PAYMENT_ACCOUNT_PREFIX):
-				# Skip total lines
 				if original_description.startswith("Total CA") or original_description.startswith("Total PAIEMENT"):
 					continue
 
-				# Restomax doubles all amounts - divide by 2 to get correct values
-				amount = (debit - credit) / 2
+				amount = (debit - credit) / divisor
 				if amount > 0:
 					reports_data[report_num]["payments"].append({
 						"account": account,
