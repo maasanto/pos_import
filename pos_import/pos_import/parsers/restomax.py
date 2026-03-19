@@ -180,10 +180,10 @@ class RestomaxParser(BasePOSParser):
 					POSLine(
 						source_code=source_code,
 						description=line_data["description"],
-						net_amount=net.quantize(Decimal("0.01")),
+						net_amount=net.quantize(Decimal("0.001")),
 						tax_rate=tva_rate,
 						tax_amount=Decimal(0),  # Not used - actual VAT in report.vat_by_rate
-						gross_amount=net.quantize(Decimal("0.01")),  # Will be recalculated
+						gross_amount=net.quantize(Decimal("0.001")),  # Will be recalculated
 					)
 				)
 
@@ -195,7 +195,7 @@ class RestomaxParser(BasePOSParser):
 					POSPayment(
 						source_code=source_code,
 						source_name=payment_data["description"],
-						amount=payment_data["amount"].quantize(Decimal("0.01")),
+						amount=payment_data["amount"].quantize(Decimal("0.001")),
 					)
 				)
 
