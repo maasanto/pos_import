@@ -511,8 +511,6 @@ class POSImport(Document):
 		si.set_posting_time = 1
 		si.is_pos = 0
 		si.update_stock = 0
-		if cash_account:
-			si.account_for_change_amount = cash_account
 
 		# Reference to POS report
 		si.po_no = f"Z-{report.report_number}"
@@ -557,7 +555,8 @@ class POSImport(Document):
 						"account_head": tax_account,
 						"cost_center": cost_center,
 						"description": f"TVA {rate}%",
-						"tax_amount": flt(amount, 2),
+						"rate": flt(rate, 2),
+						"tax_amount": flt(amount, 3),
 					},
 				)
 
