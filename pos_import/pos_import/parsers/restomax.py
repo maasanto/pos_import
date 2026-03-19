@@ -113,7 +113,7 @@ class RestomaxParser(BasePOSParser):
 					continue
 
 				amount = (credit - debit) / divisor
-				if amount > 0:
+				if amount != 0:
 					reports_data[report_num]["revenues"].append({
 						"account": account,
 						"id_restomax": id_restomax,
