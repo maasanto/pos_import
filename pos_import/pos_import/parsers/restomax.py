@@ -5,6 +5,7 @@ import csv
 from datetime import datetime
 from decimal import Decimal
 from io import BytesIO, StringIO
+from typing import ClassVar
 
 from pos_import.pos_import.parsers.base import BasePOSParser, POSLine, POSPayment, POSReport
 
@@ -14,22 +15,25 @@ class RestomaxParser(BasePOSParser):
 	Parser for Restomax export files (Excel or CSV).
 
 	File format expectations:
-	- Excel or CSV file with columns: N° Z, Date clôture, ID Restomax, Compte général, Description, TVA, DEBIT, CREDIT
-	- ID Restomax column contains source codes for item/payment mapping
+	- Excel or CSV file with columns: N° Z, Date clôture, Compte général, Description, TVA, DEBIT, CREDIT
+	- Optional ID Restomax column for item/payment mapping (falls back to description)
 	- Account 700xxx range = revenues (CREDIT column)
 	- Account 451xxx range = VAT collected
 	- Account 580xxx range = payments (DEBIT column)
-
-	Restomax exports typically duplicate every row and double all amounts.
-	However, some Z-tickets may have single (non-duplicated) rows with correct amounts.
-	The parser counts occurrences of each line and divides by the actual count.
 	"""
 
 	REVENUE_ACCOUNT_PREFIX = "700"
 	VAT_ACCOUNT_PREFIX = "451"
 	PAYMENT_ACCOUNT_PREFIX = "580"
 
-	REQUIRED_COLUMNS = ["N° Z", "Date clôture", "Compte général", "DEBIT", "CREDIT", "ID Restomax"]
+	REQUIRED_COLUMNS: ClassVar[list[str]] = [
+		"N° Z",
+		"Date clôture",
+		"Compte général",
+		"Description",
+		"DEBIT",
+		"CREDIT",
+	]
 
 	def validate_file(self, file_content: bytes) -> tuple[bool, str]:
 		"""Validate that the file is a valid Restomax export."""
@@ -52,24 +56,7 @@ class RestomaxParser(BasePOSParser):
 		"""Parse the Restomax file and return a list of POS reports."""
 		rows = self._read_file(file_content)
 
-		# First pass: count occurrences of each line to detect duplication
-		line_counts: dict[tuple, int] = {}
-		for row in rows:
-			report_num = row.get("N° Z")
-			if not report_num:
-				continue
-
-			account = str(row.get("Compte général") or "").strip()
-			original_description = str(row.get("Description") or "").strip()
-			debit = self._parse_number(row.get("DEBIT"))
-			credit = self._parse_number(row.get("CREDIT"))
-
-			line_key = (str(report_num).strip(), account, original_description, str(debit), str(credit))
-			line_counts[line_key] = line_counts.get(line_key, 0) + 1
-
-		# Second pass: process unique lines, dividing by occurrence count
 		reports_data: dict = {}
-		seen_lines: set[tuple] = set()
 
 		for row in rows:
 			report_num = row.get("N° Z")
@@ -84,15 +71,6 @@ class RestomaxParser(BasePOSParser):
 			description = original_description or "Others"
 			debit = self._parse_number(row.get("DEBIT"))
 			credit = self._parse_number(row.get("CREDIT"))
-
-			line_key = (report_num, account, original_description, str(debit), str(credit))
-
-			if line_key in seen_lines:
-				continue
-			seen_lines.add(line_key)
-
-			# Divide by occurrence count (1 for single lines, 2 for duplicated)
-			divisor = line_counts[line_key]
 
 			if report_num not in reports_data:
 				reports_data[report_num] = {
@@ -112,44 +90,49 @@ class RestomaxParser(BasePOSParser):
 				):
 					continue
 
-				amount = (credit - debit) / divisor
+				amount = credit - debit
 				if amount != 0:
-					reports_data[report_num]["revenues"].append({
-						"account": account,
-						"id_restomax": id_restomax,
-						"description": description,
-						"amount": amount,
-						"tva_rate": tva_rate,
-					})
+					reports_data[report_num]["revenues"].append(
+						{
+							"account": account,
+							"id_restomax": id_restomax,
+							"description": description,
+							"amount": amount,
+							"tva_rate": tva_rate,
+						}
+					)
 
 			elif account.startswith(self.VAT_ACCOUNT_PREFIX):
 				if "total" in original_description.lower():
 					continue
 
-				if not id_restomax:
-					continue
-
-				amount = (credit - debit) / divisor
+				amount = credit - debit
 				if amount != 0:
-					reports_data[report_num]["vat"].append({
-						"account": account,
-						"description": description,
-						"amount": amount,
-						"tva_rate": tva_rate,
-					})
+					reports_data[report_num]["vat"].append(
+						{
+							"account": account,
+							"description": description,
+							"amount": amount,
+							"tva_rate": tva_rate,
+						}
+					)
 
 			elif account.startswith(self.PAYMENT_ACCOUNT_PREFIX):
-				if original_description.startswith("Total CA") or original_description.startswith("Total PAIEMENT"):
+				if original_description.startswith("Total CA") or original_description.startswith(
+					"Total PAIEMENT"
+				):
 					continue
 
-				amount = (debit - credit) / divisor
+				amount = debit - credit
 				if amount > 0:
-					reports_data[report_num]["payments"].append({
-						"account": account,
-						"id_restomax": id_restomax,
-						"description": description,
-						"amount": amount,
-					})
+					reports_data[report_num]["payments"].append(
+						{
+							"account": account,
+							"id_restomax": id_restomax,
+							"description": description,
+							"amount": amount,
+						}
+					)
 
 		reports = []
 		for report_num, data in reports_data.items():
@@ -180,10 +163,10 @@ class RestomaxParser(BasePOSParser):
 					POSLine(
 						source_code=source_code,
 						description=line_data["description"],
-						net_amount=net.quantize(Decimal("0.001")),
+						net_amount=net.quantize(Decimal("0.01")),
 						tax_rate=tva_rate,
 						tax_amount=Decimal(0),  # Not used - actual VAT in report.vat_by_rate
-						gross_amount=net.quantize(Decimal("0.001")),  # Will be recalculated
+						gross_amount=net.quantize(Decimal("0.01")),
 					)
 				)
 
@@ -195,7 +178,7 @@ class RestomaxParser(BasePOSParser):
 					POSPayment(
 						source_code=source_code,
 						source_name=payment_data["description"],
-						amount=payment_data["amount"].quantize(Decimal("0.001")),
+						amount=payment_data["amount"].quantize(Decimal("0.01")),
 					)
 				)
 
@@ -222,13 +205,14 @@ class RestomaxParser(BasePOSParser):
 		# Try Excel
 		try:
 			import openpyxl
+
 			wb = openpyxl.load_workbook(BytesIO(file_content), read_only=True)
 			ws = wb.active
 
 			headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
 			rows = []
 			for row in ws.iter_rows(min_row=2, values_only=True):
-				rows.append(dict(zip(headers, row)))
+				rows.append(dict(zip(headers, row, strict=False)))
 			return rows
 		except Exception:
 			pass
