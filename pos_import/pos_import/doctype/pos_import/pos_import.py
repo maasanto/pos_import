@@ -1,6 +1,8 @@
 # Copyright (c) 2025, Dokos SAS and contributors
 # For license information, please see license.txt
 
+from decimal import Decimal
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -585,12 +587,35 @@ class POSImport(Document):
 
 		The Sales Invoice must be submitted; Payment Entries cannot reference a draft.
 
+		The invoice total can exceed the sum of POS payments by a few cents: the
+		POS rounds each category line independently, so its priced detail (which
+		drives the invoice) and the cash it reports taking can disagree. Any
+		shortfall within the connector's rounding tolerance is absorbed as a
+		write-off on the last payment, so the invoice settles to zero.
+
 		Args:
 			sales_invoice: The Sales Invoice to link payments to
 			report: The POSReport containing payment data
 			connector: The POS Connector configuration
 		"""
-		for payment in report.payments:
+		payments = report.payments
+		if not payments:
+			return
+
+		total_paid = sum((payment.amount for payment in payments), Decimal(0))
+		residual = Decimal(str(sales_invoice.grand_total)) - total_paid
+		write_off = residual if 0 < residual <= self._get_rounding_tolerance(connector) else Decimal(0)
+
+		write_off_account = None
+		cost_center = None
+		if write_off:
+			write_off_account = self._get_rounding_write_off_account(connector)
+			cost_center = frappe.db.get_value(
+				"Cost Center", {"company": sales_invoice.company, "is_group": 0}, "name"
+			)
+
+		last_index = len(payments) - 1
+		for index, payment in enumerate(payments):
 			mode_of_payment = connector.get_mode_of_payment_for_source_code(payment.source_code)
 			if not mode_of_payment:
 				frappe.throw(
@@ -637,18 +662,57 @@ class POSImport(Document):
 			pe.reference_no = f"Z-{report.report_number}"
 			pe.reference_date = sales_invoice.posting_date
 
+			# Absorb the rounding shortfall on the last payment so the invoice settles
+			allocated = payment.amount + write_off if (write_off and index == last_index) else payment.amount
+
 			# Link to Sales Invoice
 			pe.append(
 				"references",
 				{
 					"reference_doctype": "Sales Invoice",
 					"reference_name": sales_invoice.name,
-					"allocated_amount": float(payment.amount),
+					"allocated_amount": float(allocated),
 				},
 			)
 
+			if write_off and index == last_index:
+				pe.append(
+					"deductions",
+					{
+						"account": write_off_account,
+						"cost_center": cost_center,
+						"amount": float(write_off),
+					},
+				)
+
 			pe.insert(ignore_permissions=True)
 			pe.submit()
+
+	def _get_rounding_tolerance(self, connector) -> Decimal:
+		"""Largest invoice-vs-payments shortfall to absorb as a rounding write-off.
+
+		Falls back to the company currency's smallest fraction (e.g. 0.01 EUR).
+		"""
+		if connector.get("rounding_tolerance"):
+			return Decimal(str(connector.rounding_tolerance))
+
+		currency = frappe.get_cached_value("Company", connector.company, "default_currency")
+		fraction = frappe.db.get_value("Currency", currency, "smallest_currency_fraction_value")
+		return Decimal(str(fraction)) if fraction and float(fraction) > 0 else Decimal("0.01")
+
+	def _get_rounding_write_off_account(self, connector) -> str:
+		"""Account used to book rounding write-offs; falls back to the Company's."""
+		account = connector.get("default_write_off_account") or frappe.get_cached_value(
+			"Company", connector.company, "write_off_account"
+		)
+		if not account:
+			frappe.throw(
+				_(
+					"No rounding write-off account configured. Set one on the POS Connector "
+					"or as the Company's Write Off Account."
+				)
+			)
+		return account
 
 	def _render_preview_data(self, preview_data: dict) -> str:
 		"""Render preview data as HTML."""
