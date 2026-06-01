@@ -534,6 +534,12 @@ class POSImport(Document):
 			# Determine UOM: use mapping UOM, or fallback to item's selling/stock UOM
 			uom = (item_mapping.uom if item_mapping and item_mapping.uom else None) or item.sales_uom or item.stock_uom
 
+			# Determine income account: per-mapping override, or fallback to connector default
+			income_account = (
+				(item_mapping.income_account if item_mapping and item_mapping.income_account else None)
+				or connector.default_income_account
+			)
+
 			si.append("items", {
 				"item_code": item.name,
 				"item_name": item.item_name,
@@ -541,7 +547,7 @@ class POSImport(Document):
 				"qty": 1,
 				"uom": uom,
 				"rate": float(line.net_amount),
-				"income_account": connector.default_income_account,
+				"income_account": income_account,
 				"cost_center": cost_center,
 			})
 
