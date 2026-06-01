@@ -536,6 +536,12 @@ class POSImport(Document):
 			# Determine UOM: use mapping UOM, or fallback to item's selling/stock UOM
 			uom = (item_mapping.uom if item_mapping and item_mapping.uom else None) or item.sales_uom or item.stock_uom
 
+			# Determine income account: per-mapping override, or fallback to connector default
+			income_account = (
+				(item_mapping.income_account if item_mapping and item_mapping.income_account else None)
+				or connector.default_income_account
+			)
+
 			si.append("items", {
 				"item_code": item.name,
 				"item_name": item.item_name,
@@ -543,7 +549,7 @@ class POSImport(Document):
 				"qty": 1,
 				"uom": uom,
 				"rate": float(line.net_amount),
-				"income_account": connector.default_income_account,
+				"income_account": income_account,
 				"cost_center": cost_center,
 			})
 
@@ -570,14 +576,16 @@ class POSImport(Document):
 		# Submit only if not creating drafts
 		if not self.create_draft_invoices:
 			si.submit()
-
-		# Create Payment Entries (as draft or submitted based on connector setting)
-		self._create_payment_entries(si, report, connector, as_draft=self.create_draft_invoices)
+			# Payment Entries require a submitted Sales Invoice. In draft mode they are
+			# deferred to the "Create Payment Entries" button (create_pending_payment_entries).
+			self._create_payment_entries(si, report, connector)
 
 		return si, False
 
-	def _create_payment_entries(self, sales_invoice, report, connector, as_draft=False):
+	def _create_payment_entries(self, sales_invoice, report, connector):
 		"""Create Payment Entry documents for each payment in the Z-ticket.
+
+		The Sales Invoice must be submitted; Payment Entries cannot reference a draft.
 
 		The invoice total can exceed the sum of POS payments by a few cents: the
 		POS rounds each category line independently, so its priced detail (which
@@ -589,7 +597,6 @@ class POSImport(Document):
 			sales_invoice: The Sales Invoice to link payments to
 			report: The POSReport containing payment data
 			connector: The POS Connector configuration
-			as_draft: If True, create Payment Entries as drafts (don't submit)
 		"""
 		payments = report.payments
 		if not payments:
@@ -679,8 +686,7 @@ class POSImport(Document):
 				)
 
 			pe.insert(ignore_permissions=True)
-			if not as_draft:
-				pe.submit()
+			pe.submit()
 
 	def _get_rounding_tolerance(self, connector) -> Decimal:
 		"""Largest invoice-vs-payments shortfall to absorb as a rounding write-off.
